@@ -13,25 +13,25 @@ def home():
     return "Rafael Digital Bot is Online and Active!"
 
 def run():
-    # Render מספקת פורט באופן אוטומטי, אם לא נמצא נשתמש ב-8080
+    # Render מספקת פורט באופן אוטומטי ב-Environment Variable
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run)
-    t.daemon = True  # מאפשר לחוט השרת להיסגר כשהתוכנית הראשית נסגרת
+    t.daemon = True  # מבטיח שהשרת ייסגר כשהתוכנית הראשית נעצרת
     t.start()
 
 # --- הגדרות הבוט ---
-TOKEN = "8799447400:AAEah-A0AUzq2h0bdAugdhVMJYt2MmP-yrg"
+TOKEN = "8799447400:AAGaiCqyXpLRNSi292y56r6KirM7Xmod3wI"
 ADMIN_ID = 7622681013
-INACTIVITY_TIMEOUT = 90  # דקה וחצי
-ADMIN_WAIT_TIME = 40     # 40 שניות המתנה לחיבור למנהל
+INACTIVITY_TIMEOUT = 90  # ניתוק אחרי 90 שניות ללא הודעה
+ADMIN_WAIT_TIME = 40     # העברה למנהל אם לא נמצא משתמש תוך 40 שניות
 
 # ניהול מצב בזיכרון
-waiting_users = {}    # user_id: job_object
-active_chats = {}     # user_id: partner_id
-known_users = {}      # user_id: display_name
+waiting_users = {}    
+active_chats = {}     
+known_users = {}      
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -122,6 +122,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id in active_chats:
         partner_id = active_chats[user_id]
         reset_timer(user_id, partner_id, context)
+        # ניטור למנהל (כל עוד המנהל הוא לא זה ששלח את ההודעה)
         if user_id != ADMIN_ID:
             sender_info = known_users.get(user_id, f"ID: {user_id}")
             await context.bot.send_message(ADMIN_ID, f"🕵️ הודעה מ-{sender_info}:")
@@ -161,15 +162,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(sender_id, "המשתמש אישר! אפשר להתחיל לדבר.")
     reset_timer(sender_id, receiver_id, context)
 
-# --- הרצה ראשית ---
+# --- פונקציית הרצה ראשית ---
 def main():
-    # הפעלת שרת ה-Web ברקע
+    # הפעלת שרת ה-Keep Alive (Flask) ברקע
     keep_alive()
     
-    # בניית אפליקציית הטלגרם
+    # בניית אפליקציית הטלגרם (עם JobQueue)
     app_telegram = Application.builder().token(TOKEN).build()
     
-    # הוספת מטפלים
+    # הוספת המטפלים בפקודות והודעות
     app_telegram.add_handler(CommandHandler("start", start))
     app_telegram.add_handler(CommandHandler("chat", find_chat))
     app_telegram.add_handler(CommandHandler("exit", exit_chat))
@@ -179,6 +180,7 @@ def main():
     app_telegram.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
     
     print("Rafael Digital Bot is starting polling...")
+    # drop_pending_updates=True מונע מהבוט לענות על הודעות ישנות שנשלחו כשהיה כבוי
     app_telegram.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
